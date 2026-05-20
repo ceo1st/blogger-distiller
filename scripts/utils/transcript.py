@@ -134,27 +134,42 @@ def transcribe_from_url(video_url: str, model=None):
     if _model is None:
         return None
 
-    try:
-        cfg = _load_config()
-        initial_prompt = cfg.get("whisper_initial_prompt", "以下是普通话视频内容：大家好，")
-        t0 = time.time()
-        audio = whisper.load_audio(video_url)
-        result = _model.transcribe(
-            audio, language="zh", task="transcribe",
-            initial_prompt=initial_prompt,
-            condition_on_previous_text=False,
-        )
-        elapsed = time.time() - t0
+    import threading
 
-        text = result.get("text", "").strip()
-        return {
-            "text": text,
-            "duration": round(float(result.get("duration") or elapsed), 1),
-            "language": result.get("language", "zh"),
-            "word_count": len(text),
-        }
-    except Exception:
+    result_container = [None]
+
+    def _do_transcribe():
+        try:
+            cfg = _load_config()
+            initial_prompt = cfg.get("whisper_initial_prompt", "以下是普通话视频内容：大家好，")
+            t0_inner = time.time()
+            audio = whisper.load_audio(video_url)
+            res = _model.transcribe(
+                audio, language="zh", task="transcribe",
+                initial_prompt=initial_prompt,
+                condition_on_previous_text=False,
+            )
+            elapsed = time.time() - t0_inner
+            text = res.get("text", "").strip()
+            result_container[0] = {
+                "text": text,
+                "duration": round(float(res.get("duration") or elapsed), 1),
+                "language": res.get("language", "zh"),
+                "word_count": len(text),
+            }
+        except Exception:
+            pass
+
+    t0 = time.time()
+    t = threading.Thread(target=_do_transcribe, daemon=True)
+    t.start()
+    t.join(timeout=60)
+
+    if t.is_alive():
+        # 超时（60秒），跳过本条，不卡住后续转写
         return None
+
+    return result_container[0]
 
 
 def _get_video_duration(video_url: str):

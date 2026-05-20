@@ -503,6 +503,11 @@ def crawl_douyin(keyword=None, user_id=None, output_dir=None, token=None, max_vi
     # 采集评论
     details, comments_fetched = fetch_video_comments_batch(details, client)
 
+    # 转写前先落盘，防止转写中途卡死或中断时数据丢失
+    details_path = os.path.join(output_dir, f"{safe_name}_videos_details.json")
+    save_json(details, details_path)
+    print(f"\n💾 数据已落盘（转写前备份）: {details_path}")
+
     # 视频口播转写（可选）
     if transcript:
         from utils.transcript import get_whisper_model, transcribe_batch
@@ -517,9 +522,8 @@ def crawl_douyin(keyword=None, user_id=None, output_dir=None, token=None, max_vi
                 model=model,
             )
             if transcript_status == "url_expired":
-                expired_path = os.path.join(output_dir, f"{safe_name}_videos_details.json")
-                save_json(details, expired_path)
-                print(f"\n📁 缓存文件路径：{expired_path}")
+                save_json(details, details_path)   # 更新落盘（含已完成的部分转写）
+                print(f"\n📁 缓存文件路径：{details_path}")
                 print("请告诉我是否要删除这个文件并重新采集。")
                 return {
                     "profile": profile, "videos_list": videos_list,
@@ -528,8 +532,7 @@ def crawl_douyin(keyword=None, user_id=None, output_dir=None, token=None, max_vi
                     "transcript_status": "url_expired",
                 }
 
-    # 保存详情
-    details_path = os.path.join(output_dir, f"{safe_name}_videos_details.json")
+    # 保存详情（转写完成后最终落盘）
     save_json(details, details_path)
 
     ok_count = len([d for d in details if "_error" not in d])
