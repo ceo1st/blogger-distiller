@@ -521,15 +521,15 @@ def crawl_douyin(keyword=None, user_id=None, output_dir=None, token=None, max_vi
                 url_extractor=lambda e: e.get("video", {}).get("videoUrl", ""),
                 model=model,
             )
-            if transcript_status == "url_expired":
+            if transcript_status == "error":
                 save_json(details, details_path)   # 更新落盘（含已完成的部分转写）
                 print(f"\n📁 缓存文件路径：{details_path}")
-                print("请告诉我是否要删除这个文件并重新采集。")
+                print("请告诉我是否需要排查网络设置或重新采集。")
                 return {
                     "profile": profile, "videos_list": videos_list,
                     "details": details, "nickname": nickname,
                     "user_id": user_id, "output_dir": output_dir,
-                    "transcript_status": "url_expired",
+                    "transcript_status": "error",
                 }
 
     # 保存详情（转写完成后最终落盘）

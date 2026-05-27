@@ -93,24 +93,24 @@ class TikHubClient:
         self._rps_limit = self._resolve_rps_limit()
         self._min_interval = 1.0 / max(self._rps_limit * SAFETY_RATIO, 1)
 
-        # ------ Endpoint Routers（多平台 Fallback 核心）------
-        # 每个平台独立一个 EndpointRouter 实例，端点文件不存在时跳过
+        # ------ Endpoint Routers（多平台 Fallback 核心，懒加载）------
+        # 启动时只创建当前平台的路由器，另一个平台在首次调用时按需创建
         from .endpoint_router import EndpointRouter
         self._routers = {}
-        for plat in ["xhs", "douyin"]:
-            try:
-                self._routers[plat] = EndpointRouter(self._request, platform=plat)
-            except FileNotFoundError:
-                pass
+        self._EndpointRouter = EndpointRouter  # 保留引用供懒加载使用
 
-        # 向后兼容：self._router 始终指向当前平台的路由器
-        self._router = self._routers.get(self.platform)
-        if self._router is None and self._routers:
-            self._router = next(iter(self._routers.values()))
-        if not self._router:
-            raise TikHubError("无可用端点配置文件，请检查 xhs_endpoints.json / douyin_endpoints.json")
+        try:
+            self._routers[self.platform] = EndpointRouter(self._request, platform=self.platform)
+        except FileNotFoundError:
+            raise TikHubError(
+                f"找不到 {self.platform} 端点配置文件，"
+                "请检查 xhs_endpoints.json / douyin_endpoints.json"
+            )
 
-        # ------ 启动时自动探测（仅探测当前平台，避免双倍探测开销）------
+        # self._router 始终指向当前平台的路由器（向后兼容）
+        self._router = self._routers[self.platform]
+
+        # ------ 启动时自动探测（仅当前平台，避免调用另一平台端点）------
         self._router.auto_probe_and_reorder()
 
     # ----------------------------------------------------------
@@ -339,22 +339,35 @@ class TikHubClient:
     # ----------------------------------------------------------
     # 内部：多平台池路由（dy_ 前缀 → 抖音路由器，其余 → XHS 路由器）
     # ----------------------------------------------------------
+    def _get_or_create_router(self, platform: str):
+        """
+        懒加载：获取指定平台的 EndpointRouter，首次调用时才创建。
+        避免选抖音时初始化小红书端点（反之亦然）。
+        """
+        if platform not in self._routers:
+            try:
+                self._routers[platform] = self._EndpointRouter(self._request, platform=platform)
+            except FileNotFoundError:
+                raise TikHubError(
+                    f"找不到 {platform} 端点配置文件，"
+                    "请检查 xhs_endpoints.json / douyin_endpoints.json"
+                )
+        return self._routers[platform]
+
     def _call_pool(self, pool_name, args, **kwargs):
         """
-        按池名前缀路由到对应平台的 EndpointRouter。
+        按池名前缀路由到对应平台的 EndpointRouter（另一平台按需懒加载）。
 
         命名约定：
           - "dy_xxx" → 抖音路由器，实际池名为 xxx（剥离 dy_ 前缀）
           - 其余     → XHS 路由器，池名原样传入
         """
         if pool_name.startswith("dy_"):
-            router = self._routers.get("douyin")
+            router = self._get_or_create_router("douyin")
             actual_pool = pool_name[3:]  # 剥离 "dy_" 前缀
         else:
-            router = self._routers.get("xhs")
+            router = self._get_or_create_router("xhs")
             actual_pool = pool_name
-        if not router:
-            raise TikHubError(f"平台 router 未初始化，无法调用池: {pool_name}")
         return router.call(actual_pool, args, **kwargs)
 
     # ----------------------------------------------------------
