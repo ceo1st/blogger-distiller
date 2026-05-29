@@ -314,7 +314,11 @@ blogger-distiller/
 
 ## 进群交流
 
-vx:catsanddogs666(白天回复不及时）
+<div align="center">
+<img src="assets/qr-group.jpg" width="260" alt="博主蒸馏器交流群">
+</div>
+
+vx:catsanddogs666（白天回复不及时）
 
 ---
 
