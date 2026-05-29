@@ -314,9 +314,7 @@ blogger-distiller/
 
 ## 进群交流
 
-<div align="center">
-<img src="assets/qr-group.jpg" width="220" alt="博主蒸馏器 skill 社群二维码">
-</div>
+vx:catsanddogs666(白天回复不及时）
 
 ---
 
