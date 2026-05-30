@@ -205,9 +205,12 @@ AI 会自动完成下载和配置。
 
 在 **控制台 → API Token** 页面生成一个 Token key，然后将其发给你的agent即可！
 
-常见问题：agent无法解析API密钥，可尝试3种解决方法：
+ps：若agent无法解析API密钥，可尝试3种解决方法：
+
 1.重试/检查网络问题
+
 2.换密钥，不用重复充值
+
 3.换一个agent，claudcode/codex/workbuddy/openclaw/hermes都能用
 
 <details>
