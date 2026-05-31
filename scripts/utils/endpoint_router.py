@@ -33,8 +33,8 @@ from .adapters import ADAPTERS, _is_empty
 _XHS_POOL_CATEGORIES = {
     "search_notes": "search",
     "search_users": "search",
-    "fetch_user_info": "user",
-    "fetch_user_notes": "user",
+    "fetch_user_info": "user_info",
+    "fetch_user_notes": "user_notes",
     "fetch_note_detail_image": "detail",
     "fetch_note_detail_video": "detail",
     "fetch_note_comments": "comments",
@@ -47,8 +47,8 @@ _XHS_POOL_CATEGORIES = {
 _DOUYIN_POOL_CATEGORIES = {
     "search_videos": "search",
     "search_users": "search",
-    "fetch_user_info": "user",
-    "fetch_user_videos": "user",
+    "fetch_user_info": "user_info",
+    "fetch_user_videos": "user_videos",
     "fetch_video_detail": "detail",
     "fetch_video_comments": "comments",
     # 关键词趋势 full 版（Index API）
