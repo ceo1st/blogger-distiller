@@ -51,7 +51,7 @@
 把「手工翻笔记 → 凭感觉总结」变成「一句话 → 自动蒸馏 → 拿结果」。
 
 ```
-拆解/蒸馏博主 XX
+拆解/蒸馏博主 XX（最好附上链接🔗）
 ```
 
 AI 自动完成全流程：
@@ -205,6 +205,13 @@ AI 会自动完成下载和配置。
 
 在 **控制台 → API Token** 页面生成一个 Token key，然后将其发给你的agent即可！
 
+ps：若agent无法解析API密钥，可尝试3种解决方法：
+
+1.重试/检查网络问题
+
+2.换密钥，不用重复充值
+
+3.换一个agent，claudcode/codex/workbuddy/openclaw/hermes都能用
 
 <details>
 <summary>可选：自定义 RPS 加速</summary>
