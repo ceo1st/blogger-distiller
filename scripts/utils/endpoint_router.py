@@ -287,7 +287,19 @@ class EndpointRouter:
                     errors.append(f"{group_tag} HTTP 422 (内容受限/参数拒绝)")
                     continue
 
-                if status_code in self.DEGRADABLE_CODES or status_code is None:
+                if status_code is None:
+                    # 无 HTTP 状态码 = 网络层瞬时故障（IncompleteRead / RemoteDisconnected / timeout）
+                    # 不标死链，用计数器，连续 3 次才标（且只标个体，不级联类别）
+                    ep_key = self._ep_key(ep)
+                    count = self._soft_fail_counts.get(ep_key, 0) + 1
+                    self._soft_fail_counts[ep_key] = count
+                    if count >= 3:
+                        self._dead_endpoints[ep_key] = True
+                        print(f"  ⛔ 标记死链: [{ep['group']}] {ep['path']} (连续{count}次网络错误)")
+                    errors.append(f"{group_tag} 网络错误 (第{count}次): {str(e)[:40]}")
+                    continue
+
+                if status_code in self.DEGRADABLE_CODES:
                     if status_code == 400:
                         # 400 可能只是单条笔记被限制（私密/删除），不立即标死链
                         # 同端点连续 3 次 400 才标死链，且只标个体（不走 _mark_dead 避免类别级联）
@@ -300,13 +312,13 @@ class EndpointRouter:
                         errors.append(f"{group_tag} HTTP 400 (第{count}次)")
                     else:
                         # 500/502/503/504/404 → 端点真的挂了，立即标死链
-                        reason = f"HTTP {status_code}" if status_code else str(e)[:60]
+                        reason = f"HTTP {status_code}"
                         self._mark_dead(ep, reason, pool_name)
                         errors.append(f"{group_tag} {reason}")
                     continue
 
-                # 其他未知错误也降级
-                self._mark_dead(ep, str(e)[:60], pool_name)
+                # 其他未知 HTTP 错误也降级，但不级联类别
+                self._dead_endpoints[self._ep_key(ep)] = True
                 errors.append(f"{group_tag} {str(e)[:60]}")
                 continue
 
@@ -422,19 +434,25 @@ class EndpointRouter:
                     print(f"  ✅ {group:8s} | {latency:4d}ms | {label}")
                 except TikHubError as e:
                     latency = int((time.time() - start) * 1000)
+                    code = getattr(e, "status_code", None)
                     # 422 = 路径存在但探测参数无效（空 aweme_id / 格式不匹配），视为可用
-                    if getattr(e, "status_code", None) == 422:
+                    if code == 422:
                         result[group] = (True, latency)
                         print(f"  ✅ {group:8s} | {latency:4d}ms | {label} (422→路径存在)")
+                    elif code is None:
+                        # 无 HTTP 状态码 = 网络层瞬时故障，保留配置优先级
+                        result[group] = (True, latency + 5000)
+                        print(f"  ⚠️ {group:8s} | {latency:4d}ms | {label} (网络抖动，保留优先级)")
                     else:
                         result[group] = (False, latency)
-                        code = e.status_code or "ERR"
                         print(f"  ❌ {group:8s} | {latency:4d}ms | HTTP {code} | {label}")
                 except Exception as e:
                     latency = int((time.time() - start) * 1000)
-                    result[group] = (False, latency)
-                    print(f"  ❌ {group:8s} | {latency:4d}ms | {str(e)[:30]} | {label}")
-                
+                    # 网络层瞬时故障（IncompleteRead / RemoteDisconnected / timeout）
+                    # 视为"不确定"而非"不可用"，不改变 JSON 配置的优先级
+                    result[group] = (True, latency + 5000)
+                    print(f"  ⚠️ {group:8s} | {latency:4d}ms | {str(e)[:30]} | {label} (网络抖动，保留优先级)")
+
                 time.sleep(0.2)
             return result
         

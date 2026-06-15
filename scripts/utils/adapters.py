@@ -434,9 +434,9 @@ def user_notes_app_v2(raw, args):
                 "nickName": _pick(user_raw, "nickname", "nick_name", "nickName") or "",
                 "avatar": _pick(user_raw, "avatar") or "",
             },
-            "interactInfo": _normalize_interact(interact_raw),
+            "interactInfo": _extract_interact_flat(item),
             "cover": cover_raw,
-            "xsecToken": _pick(item, "xsec_token", "xsecToken") or "",
+            "xsecToken": _pick(item, "xsec_token", "xsecToken") or _pick(nc, "xsec_token", "xsecToken") or "",
         })
 
     return {
@@ -493,9 +493,20 @@ def note_detail_app_v2(raw, args):
     if not isinstance(inner, dict):
         return raw
 
-    # app_v2 的 note 对象
+    # app_v2 的 note 对象（重构后格式: note_list[0] + comment_list）
     note_raw = _pick(inner, "note", "noteData") or {}
     comments_raw = _pick(inner, "comments") or {}
+
+    # 重构后 app_v2: inner = {note_list: [...], comment_list: [...], ...}
+    if not note_raw:
+        nl = _pick(inner, "note_list") or []
+        if isinstance(nl, list) and nl:
+            note_raw = nl[0]
+    if not comments_raw:
+        cl = _pick(inner, "comment_list") or []
+        if isinstance(cl, list):
+            comments_raw = cl
+
     comment_list = []
     if isinstance(comments_raw, dict):
         comment_list = _pick(comments_raw, "list", "comments") or []
@@ -503,7 +514,6 @@ def note_detail_app_v2(raw, args):
         comment_list = comments_raw
 
     if not note_raw and not inner.get("items"):
-        # 可能 inner 本身就是 note
         if inner.get("noteId") or inner.get("note_id") or inner.get("desc"):
             note_raw = inner
 

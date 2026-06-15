@@ -62,12 +62,35 @@ def _ensure_ffmpeg_in_path():
             _ffmpeg_ready = True
             return True
 
-    # 4. 找不到：提示一次
+    # 4. 找不到 → 尝试自动安装
     print()
-    print("⚠️  视频转写已全部跳过：找不到 ffmpeg（视频声音提取工具）。")
-    print("    如需修复，请重新运行环境检查：python3 scripts/check_env.py")
+    print("⚠️  未检测到 ffmpeg（视频声音提取必须的工具），正在尝试自动安装...")
+    try:
+        from ..check_env import _install_ffmpeg
+        if _install_ffmpeg():
+            # 安装完重新检测
+            if shutil.which("ffmpeg"):
+                _ffmpeg_ready = True
+                print("✅  ffmpeg 安装成功，继续转写。")
+                return True
+            # brew 装完可能不在默认 PATH，再检查固定路径
+            for path in candidates:
+                if os.path.isfile(path):
+                    ffmpeg_dir = os.path.dirname(path)
+                    os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+                    _ffmpeg_ready = True
+                    print("✅  ffmpeg 安装成功，继续转写。")
+                    return True
+    except ImportError:
+        pass
+
+    # 自动安装失败：明确报错，不标记 _ffmpeg_ready，下次还会重试
     print()
-    _ffmpeg_ready = True  # 标记已处理，后续静默跳过
+    print("❌  ffmpeg 自动安装失败。请手动安装后重试：")
+    print("    macOS:   brew install ffmpeg")
+    print("    Ubuntu:  sudo apt-get install ffmpeg")
+    print("    Windows: winget install Gyan.FFmpeg")
+    print()
     return False
 
 
