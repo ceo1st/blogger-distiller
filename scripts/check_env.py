@@ -37,10 +37,11 @@ def _print_info(msg):
 def _load_config() -> dict:
     if os.path.isfile(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(CONFIG_FILE, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  ⚠️ 配置文件读取失败（{CONFIG_FILE}）: {e}")
+
     return {}
 
 

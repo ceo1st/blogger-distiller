@@ -27,7 +27,7 @@ def _ensure_ffmpeg_in_path():
 
     # 1. 优先读 check_env.py 写入的已知路径
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, "r", encoding="utf-8-sig") as f:
             cfg = json.load(f)
         saved = cfg.get("ffmpeg_path", "")
         if saved and os.path.isfile(saved):
@@ -96,9 +96,10 @@ def _ensure_ffmpeg_in_path():
 
 def _load_config() -> dict:
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, "r", encoding="utf-8-sig") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        print(f"  ⚠️ 配置文件读取失败（{CONFIG_FILE}）: {e}")
         return {}
 
 

@@ -133,13 +133,13 @@ class TikHubClient:
 
         if os.path.isfile(cls.CONFIG_FILE):
             try:
-                with open(cls.CONFIG_FILE, "r", encoding="utf-8") as f:
+                with open(cls.CONFIG_FILE, "r", encoding="utf-8-sig") as f:
                     cfg = json.load(f)
                 file_token = cfg.get("tikhub_api_token", "").strip()
                 if file_token:
                     return file_token
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"  ⚠️ 配置文件读取失败（{cls.CONFIG_FILE}）: {e}")
 
         return ""
 

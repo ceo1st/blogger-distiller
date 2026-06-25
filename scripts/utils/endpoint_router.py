@@ -81,6 +81,7 @@ class EndpointRouter:
         self._dead_category_groups = {}  # key = "category:group" → True（跨池、同类型 group 死链）
         self._soft_fail_counts = {}  # key = "group:path" → int（软失败计数）
         self._http400_counts = {}  # key = "group:path" → int（连续 HTTP 400 计数）
+        self._http5xx_counts = {}  # key = "group:path" → int（连续 HTTP 5xx 计数）
 
         # 按平台选择池类别映射
         if self._platform == "douyin":
@@ -253,8 +254,10 @@ class EndpointRouter:
                 if actually_tried > 1:
                     print(f"  ✅ {group_tag} 降级成功")
 
-                # 成功时重置该端点的连续 400 计数
-                self._http400_counts[self._ep_key(ep)] = 0
+                # 成功时重置该端点的连续失败计数
+                ep_success_key = self._ep_key(ep)
+                self._http400_counts[ep_success_key] = 0
+                self._http5xx_counts[ep_success_key] = 0
 
                 # 注入端点来源标识（供轮次2补调时排除已用端点）
                 normalized["_endpoint_used"] = self._ep_key(ep)
@@ -310,11 +313,21 @@ class EndpointRouter:
                             self._dead_endpoints[ep_key] = True
                             print(f"  ⛔ 标记死链: [{ep['group']}] {ep['path']} (连续{count}次 HTTP 400)")
                         errors.append(f"{group_tag} HTTP 400 (第{count}次)")
-                    else:
-                        # 500/502/503/504/404 → 端点真的挂了，立即标死链
-                        reason = f"HTTP {status_code}"
+                    elif status_code == 404:
+                        # 404 = 端点路径不存在，永久性故障，立即标死链
+                        reason = f"HTTP 404"
                         self._mark_dead(ep, reason, pool_name)
                         errors.append(f"{group_tag} {reason}")
+                    else:
+                        # 500/502/503/504 = 服务端瞬时故障，和 400 一样走计数器
+                        # 连续 3 次才标死链，只标个体不级联类别
+                        ep_key = self._ep_key(ep)
+                        count = self._http5xx_counts.get(ep_key, 0) + 1
+                        self._http5xx_counts[ep_key] = count
+                        if count >= 3:
+                            self._dead_endpoints[ep_key] = True
+                            print(f"  ⛔ 标记死链: [{ep['group']}] {ep['path']} (连续{count}次 HTTP {status_code})")
+                        errors.append(f"{group_tag} HTTP {status_code} (第{count}次)")
                     continue
 
                 # 其他未知 HTTP 错误也降级，但不级联类别
@@ -523,6 +536,7 @@ class EndpointRouter:
         self._dead_category_groups.clear()
         self._soft_fail_counts.clear()
         self._http400_counts.clear()
+        self._http5xx_counts.clear()
 
     def reset_category_cache(self, category):
         """重置某个类别的死链缓存（如 'comments'），不影响其他类别"""
@@ -539,3 +553,4 @@ class EndpointRouter:
                 self._dead_endpoints.pop(key, None)
                 self._soft_fail_counts.pop(key, None)
                 self._http400_counts.pop(key, None)
+                self._http5xx_counts.pop(key, None)
