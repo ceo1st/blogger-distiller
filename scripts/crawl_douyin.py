@@ -265,9 +265,10 @@ def get_douyin_profile(client, user_id, max_videos=50):
 # ----------------------------------------------------------
 # Step 3: 逐条获取视频详情
 # ----------------------------------------------------------
-def get_all_video_details(client, videos_dict, output_dir, blogger_name):
+def get_all_video_details(client, videos_dict, output_dir, blogger_name, on_detail_ready=None):
     """
     逐条获取视频详情，每10条 checkpoint，支持断点恢复。
+    on_detail_ready: 可选回调，每条详情成功获取后立刻调用（用于流水线转写）。
 
     Returns:
         details — list of unified video entries
@@ -340,6 +341,12 @@ def get_all_video_details(client, videos_dict, output_dir, blogger_name):
                 liked = video_obj.get("interactInfo", {}).get("likedCount", "?")
                 print(f" ✅ 赞:{liked}")
                 ok_count += 1
+
+                if on_detail_ready:
+                    try:
+                        on_detail_ready(entry)
+                    except Exception as te:
+                        print(f"     ⚠️ 流水线回调异常: {te}")
 
         except Exception as e:
             print(f" ❌ {str(e)[:50]}")
@@ -497,43 +504,48 @@ def crawl_douyin(keyword=None, user_id=None, output_dir=None, token=None, max_vi
     profile_path = os.path.join(output_dir, f"{safe_name}_profile.json")
     save_json(profile, profile_path)
 
-    # 逐条获取详情
-    details = get_all_video_details(client, videos, output_dir, nickname)
+    # 流水线转写：提前加载模型 + 构建回调
+    transcript_callback = None
+    if transcript:
+        from utils.transcript import get_whisper_model, transcribe_from_url
+        print(f"\n{'='*60}")
+        print(f"🎙 口播转写模式：流水线（边采边转）")
+        print(f"{'='*60}")
+        whisper_model = get_whisper_model()
+        if whisper_model:
+            _transcript_fails = [0]
+
+            def transcript_callback(entry):
+                url = entry.get("video", {}).get("videoUrl", "")
+                if not url:
+                    return
+                print(f"     🎙 转写中...", end="", flush=True)
+                t0 = time.time()
+                result = transcribe_from_url(url, model=whisper_model)
+                if result:
+                    _transcript_fails[0] = 0
+                    elapsed = round(time.time() - t0, 1)
+                    print(f" ✅ ({elapsed}s, {result['word_count']}字)")
+                    entry["transcript"] = result
+                else:
+                    _transcript_fails[0] += 1
+                    print(f" ⚠️ 下载失败")
+                    entry["_transcript_error"] = "pipeline_download_failed"
+
+    # 逐条获取详情（如有转写回调则边拉边转）
+    details = get_all_video_details(client, videos, output_dir, nickname, on_detail_ready=transcript_callback)
 
     # 采集评论
     details, comments_fetched = fetch_video_comments_batch(details, client)
 
-    # 转写前先落盘，防止转写中途卡死或中断时数据丢失
+    # 落盘（含转写结果）
     details_path = os.path.join(output_dir, f"{safe_name}_videos_details.json")
     save_json(details, details_path)
-    print(f"\n💾 数据已落盘（转写前备份）: {details_path}")
 
-    # 视频口播转写（可选）
     if transcript:
-        from utils.transcript import get_whisper_model, transcribe_batch
-        print(f"\n{'='*60}")
-        print(f"🎙 开始视频口播转写（Whisper）")
-        print(f"{'='*60}")
-        model = get_whisper_model()
-        if model:
-            details, transcript_status = transcribe_batch(
-                details,
-                url_extractor=lambda e: e.get("video", {}).get("videoUrl", ""),
-                model=model,
-            )
-            if transcript_status == "error":
-                save_json(details, details_path)   # 更新落盘（含已完成的部分转写）
-                print(f"\n📁 缓存文件路径：{details_path}")
-                print("请告诉我是否需要排查网络设置或重新采集。")
-                return {
-                    "profile": profile, "videos_list": videos_list,
-                    "details": details, "nickname": nickname,
-                    "user_id": user_id, "output_dir": output_dir,
-                    "transcript_status": "error",
-                }
-
-    # 保存详情（转写完成后最终落盘）
-    save_json(details, details_path)
+        t_ok = len([d for d in details if d.get("transcript")])
+        t_total = len([d for d in details if "_error" not in d])
+        print(f"\n🎙 转写完成: {t_ok}/{t_total} 条成功")
 
     ok_count = len([d for d in details if "_error" not in d])
     print(f"\n💾 视频详情: {details_path} ({ok_count}条有效)")
