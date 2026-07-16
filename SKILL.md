@@ -477,7 +477,7 @@ blogger-distiller/
 │       ├── common.py         # 共用工具函数
 │       └── quality.py        # 数据质量检查工具
 └── references/
-    └── 产出物质量标杆.md
+    └── 张咋啦_创作指南.md
 ```
 
 ---
@@ -595,7 +595,7 @@ python scripts/deep_analyze.py ./data/<博主名>_analysis.json "<博主名>" \
 
 ## 参考文档
 
-- `references/产出物质量标杆.md` — 可作为产出结构和质量上限参考；若与当前 HTML / Skill 文件夹契约冲突，以本文件和操作手册为准
+- `references/张咋啦_创作指南.md` — 可作为创作指南类产出结构参考；若与当前 HTML / Skill 文件夹契约冲突，以本文件和操作手册为准
 
 ---
 
